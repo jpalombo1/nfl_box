@@ -8,14 +8,38 @@ Created on Sun Nov 25 15:47:12 2018
 
 import csv
 import time
+from pathlib import Path
 
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt  # type: ignore
 import numpy as np
 import pandas as pd
 
+DATA_PATH = Path(__file__).parent / "data" / "nfl_scores.csv"
+COL_NAMES = [
+    "Number",
+    "Score",
+    "Home",
+    "Away",
+    "Total",
+    "Differential",
+    "Count",
+    "All Games",
+    "Matchup",
+]
 
-def old_way(box_dict: np.ndarray) -> np.ndarray:
-    with open("data/nfl_scores.csv", "r") as score_file:
+NUM_DIGITS = 10
+
+
+def old_way() -> np.ndarray:
+    """Open csv row by row, get last digit of each score in slots 2/3 of csv entry, add count of games with 2 digit score entry to 1 digit score pair.
+    Finally normalize by divinding by total count of games
+    e.g. Row had home 14 away 10 times 1000, then add 100 to (4,0) entry in array.
+
+    Returns:
+        np.ndarray: 10x10 array matching pair of last digits to number of games.
+    """
+    box_dict = np.zeros((NUM_DIGITS, NUM_DIGITS))
+    with open(DATA_PATH) as score_file:
         score_read = csv.reader(score_file, delimiter=",")
         for row in score_read:
             box_num1 = int(row[2]) % 10
@@ -23,36 +47,32 @@ def old_way(box_dict: np.ndarray) -> np.ndarray:
             count = int(row[6])
             box_dict[box_num1][box_num2] += count
 
-    box_dict = box_dict / np.sum(sum(box_dict)) * 100
-    return box_dict
+    return box_dict / np.sum(sum(box_dict)) * 100
 
 
-def new_way(box_dict: np.ndarray) -> np.ndarray:
+def new_way() -> np.ndarray:
+    """Use pandas to open csv, then use pivot table functionality to sum and order same dataframe.
+
+    Returns:
+        np.ndarray: 10x10 array matching pair of last digits to number of games.
+    """
     df = pd.read_csv(
-        "data/nfl_scores.csv",
+        DATA_PATH,
+        names=COL_NAMES,
         header=None,
-        names=[
-            "Number",
-            "Score",
-            "Home",
-            "Away",
-            "Total",
-            "Differential",
-            "Count",
-            "All Games",
-            "Matchup",
-        ],
     )
     df["Home_End"] = df["Home"] % 10
     df["Away_End"] = df["Away"] % 10
     by_end_df = (
         df[["Home_End", "Away_End", "Count"]].groupby(["Home_End", "Away_End"]).sum()
     )
-    percent_df = by_end_df / by_end_df.sum() * 100.0  # type: ignore
-    return percent_df.to_numpy().reshape(box_dict.shape)
+    return (by_end_df.to_numpy() / by_end_df.to_numpy().sum() * 100.0).reshape(
+        NUM_DIGITS, NUM_DIGITS
+    )
 
 
-def plot(scores: np.ndarray):
+def plot(scores: np.ndarray) -> None:
+    """Plotting function, image heatap of scores (home/away) to frequency."""
     fig, ax = plt.subplots()
     im = plt.imshow(scores, interpolation="nearest")  # type: ignore
     ax.set_xlabel("Home")
@@ -68,15 +88,21 @@ def plot(scores: np.ndarray):
     plt.show()
 
 
+def main() -> None:
+    """Main function call. Compare ways of processing data."""
+    time_funcs = [old_way, new_way]
+    box_dicts = []
+    for func in time_funcs:
+        start = time.time()
+        box_dict = func()
+        diff_time = time.time() - start
+        box_dicts.append(box_dict)
+        print(f"Max {np.argmax(box_dict)}")
+        print(f"Time {diff_time}")
+
+    print(f"Same result?: {np.all(box_dicts[0] == box_dicts[1])}\n")
+    plot(box_dicts[0].T)
+
+
 if __name__ == "__main__":
-    box_dict = np.zeros((10, 10))
-    s1 = time.time()
-    b1 = old_way(box_dict)
-    d1 = time.time() - s1
-    box_dict = np.zeros((10, 10))
-    s2 = time.time()
-    b2 = new_way(box_dict)
-    d2 = time.time() - s2
-    print(f"Max {np.argmax(b2)}")
-    print(f"{b1=}\n{b2=}\n{np.all(b1 == b2)=}\ntime old: {d1}\ntime new: {d2}")
-    plot(b2.T)
+    main()
