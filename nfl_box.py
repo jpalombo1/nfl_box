@@ -41,7 +41,9 @@ def old_way() -> np.ndarray:
     box_dict = np.zeros((NUM_DIGITS, NUM_DIGITS))
     with open(DATA_PATH) as score_file:
         score_read = csv.reader(score_file, delimiter=",")
-        for row in score_read:
+        for cnt, row in enumerate(score_read):
+            if cnt == 0:
+                continue
             box_num1 = int(row[2]) % 10
             box_num2 = int(row[3]) % 10
             count = int(row[6])
@@ -56,11 +58,7 @@ def new_way() -> np.ndarray:
     Returns:
         np.ndarray: 10x10 array matching pair of last digits to number of games.
     """
-    df = pd.read_csv(
-        DATA_PATH,
-        names=COL_NAMES,
-        header=None,
-    )
+    df = pd.read_csv(DATA_PATH)
     df["Home_End"] = df["Home"] % 10
     df["Away_End"] = df["Away"] % 10
     by_end_df = (
